@@ -165,8 +165,8 @@ def run():
     data_folder = os.path.join(data_dir, 'data_road/training')
     image_paths = glob(os.path.join(data_folder, 'image_2', '*.png'))
 
-    epochs = 9
-    batch_size = 10
+    epochs = 20
+    batch_size = 12
     num_epochs_per_decay = epochs / 3
 
     #Set initial learning rate
@@ -184,7 +184,8 @@ def run():
     global_step = tf.Variable(0, trainable=False, name='global_step')
 
     #Use an exponential decay learning rate. Decay the value from init_rate by decay_factor 
-    learning_rate = tf.train.exponential_decay(init_rate, global_step, decay_steps, decay_factor, staircase=True)
+    #learning_rate = tf.train.exponential_decay(init_rate, global_step, decay_steps, decay_factor, staircase=True)
+    learning_rate = 0.001
 
     # Download pretrained vgg model
     helper.maybe_download_pretrained_vgg(data_dir)
