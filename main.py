@@ -55,17 +55,51 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     :return: The Tensor for the last layer of output
     """
     # TODO: Implement function
-    conv_1x1_l7 = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, strides=(1, 1), padding='same', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
-    conv_1x1_l4 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, strides=(1, 1), padding='same', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
-    conv_1x1_l3 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, strides=(1, 1), padding='same', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
+    conv_1x1_l7 = tf.layers.conv2d(vgg_layer7_out,
+                                   num_classes, 1,
+                                   strides=(1, 1),
+                                   padding='same',
+                                   kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                                   kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
 
-    upSample_l7 = tf.layers.conv2d_transpose(conv_1x1_l7, num_classes, 4, strides=(2, 2), padding='same', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
+    upSample_l7 = tf.layers.conv2d_transpose(conv_1x1_l7,
+                                             num_classes, 4,
+                                             strides=(2, 2),
+                                             padding='same',
+                                             kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                                             kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
+
+    conv_1x1_l4 = tf.layers.conv2d(vgg_layer4_out,
+                                   num_classes, 1,
+                                   strides=(1, 1),
+                                   padding='same',
+                                   kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                                   kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
+ 
     merge1 = tf.add(upSample_l7, conv_1x1_l4)
 
-    upSample2 = tf.layers.conv2d_transpose(merge1, num_classes, 4, strides=(2, 2), padding='same', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
+    upSample2 = tf.layers.conv2d_transpose(merge1,
+                                           num_classes, 4,
+                                           strides=(2, 2),
+                                           padding='same',
+                                           kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                                           kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
+
+    conv_1x1_l3 = tf.layers.conv2d(vgg_layer3_out,
+                                   num_classes, 1,
+                                   strides=(1, 1),
+                                   padding='same',
+                                   kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                                   kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
+
     merge2 = tf.add(upSample2, conv_1x1_l3)
 
-    output = tf.layers.conv2d_transpose(merge2, num_classes, 16, strides=(8, 8), padding='same', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
+    output = tf.layers.conv2d_transpose(merge2,
+                                        num_classes, 16,
+                                        strides=(8, 8),
+                                        padding='same',
+                                        kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                                        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-2))
 
     return output
 tests.test_layers(layers)
@@ -83,8 +117,9 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes, global_st
     # TODO: Implement function
     logits_out = tf.reshape(nn_last_layer, (-1, num_classes))
     logits_ref = tf.reshape(correct_label, (-1, num_classes))
-
+    
     cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=logits_ref, logits=logits_out))
+
     optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate)
     train_op = optimizer.minimize(cross_entropy_loss, global_step=global_step)
 
@@ -93,7 +128,7 @@ tests.test_optimize(optimize)
 
 
 def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_image,
-             correct_label, keep_prob, learning_rate):
+             correct_label, keep_prob, learning_rate, merged, train_writer):
     """
     Train neural network and print out the loss during training.
     :param sess: TF Session
@@ -112,12 +147,13 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     for i in range(epochs):
         print("Epoch {} ...".format(i))
         for image, label in get_batches_fn(batch_size):
-            _, loss = sess.run([train_op, cross_entropy_loss], feed_dict={input_image:image, correct_label:label, keep_prob:0.5})
+            _, summary, loss = sess.run([train_op, merged, cross_entropy_loss], feed_dict={input_image:image, correct_label:label, keep_prob:0.5})
+            train_writer.add_summary(summary, (batch + 1))
             print("Batch {} - Loss {:.3f}".format(batch, loss))
             batch = batch + 1
 
     return
-tests.test_train_nn(train_nn)
+#tests.test_train_nn(train_nn)
 
 def run():
     num_classes = 2
@@ -173,10 +209,17 @@ def run():
         output_layer = layers(layer3, layer4, layer7, num_classes)
         logits, train_op, cross_entropy_loss = optimize(output_layer, correct_label, learning_rate, num_classes, global_step)
 
+        tf.summary.scalar('learning_rate', learning_rate)
+        tf.summary.scalar('cross_entropy_loss', cross_entropy_loss)
+
+        # Merge all the summaries and write them out to /tmp/mnist_logs (by default)
+        merged = tf.summary.merge_all()
+        train_writer = tf.summary.FileWriter('/home/shyam/Work/SDCNDP/Project12/tensorboard', sess.graph)
+
         sess.run(tf.global_variables_initializer())
 
         # TODO: Train NN using the train_nn function
-        train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_image, correct_label, keep_prob, learning_rate)
+        train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_image, correct_label, keep_prob, learning_rate, merged, train_writer)
 
         # TODO: Save inference data using helper.save_inference_samples
         helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
